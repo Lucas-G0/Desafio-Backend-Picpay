@@ -25,13 +25,16 @@ public class TransactionService {
     @Autowired
     private RestTemplate restTemplate;
 
-    public void createTransaction(TransactionDTO transaction) throws Exception {
+    @Autowired
+    private NotificationService notificationService;
+
+    public Transaction createTransaction(TransactionDTO transaction) throws Exception {
         User sender = this.userService.findUserById(transaction.senderId());
         User receiver = this.userService.findUserById(transaction.receiverId());
 
         userService.validateTransaction(sender, transaction.value());
 
-        boolean isAuthorized = this.authorizeTransaction(sender,transaction.value());
+        boolean isAuthorized = this.authorizeTransaction(sender, transaction.value());
         if (!isAuthorized) {
             throw new Exception("Transação não autorizada");
         }
@@ -48,14 +51,19 @@ public class TransactionService {
         repository.save(newTransaction);
         userService.saveUser(sender);
         userService.saveUser(receiver);
+
+        this.notificationService.sendNotification(sender, "Transação realizada com sucesso");
+        this.notificationService.sendNotification(receiver, "Transação recebida com sucesso");
+
+        return newTransaction;
     }
 
     public boolean authorizeTransaction(User sender, BigDecimal value){
-        ResponseEntity<Map> autthorizationResponse = restTemplate.getForEntity("https://util.devi.tools/api/v2/authorize", Map.class);
+        ResponseEntity<Map> authorizationResponse = restTemplate.getForEntity("https://util.devi.tools/api/v2/authorize", Map.class);
 
-        if (autthorizationResponse.getStatusCode() == HttpStatus.OK){
-            String message = (String) autthorizationResponse.getBody().get("message");
-            return "Autorizado".equalsIgnoreCase(message);
+        if (authorizationResponse.getStatusCode() == HttpStatus.OK){
+            String status = (String) authorizationResponse.getBody().get("status");
+            return "Success".equalsIgnoreCase(status);
         } else return false;
     }
 }
